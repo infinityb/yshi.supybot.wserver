@@ -85,7 +85,7 @@ class WServer(callbacks.Plugin):
             server_uri = 'http://{}'.format(server_uri)
         uri = urlparse(server_uri)
         try:
-            result_recs = wserver(server_uri)
+            result_recs = list(wserver(server_uri))
         except (requests.ConnectionError, requests.Timeout) as e:
             try:
                 fmt = u"couldn't connect to {0.netloc} ({1}) :("
@@ -94,7 +94,7 @@ class WServer(callbacks.Plugin):
                 fmt = u"couldn't connect to {0.netloc} :("
                 irc.reply(fmt.format(uri), prefixNick=False)
             return
-        for result_rec in wserver(server_uri):
+        for result_rec in result_recs:
             fmt = None
             if isinstance(result_rec, ServerRecord):
                 fmt = "{0.host} is running {0.wserver}"
