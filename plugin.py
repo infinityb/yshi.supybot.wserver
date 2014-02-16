@@ -86,7 +86,7 @@ class WServer(callbacks.Plugin):
         uri = urlparse(server_uri)
         try:
             result_recs = wserver(server_uri)
-        except requests.ConnectionError as e:
+        except (requests.ConnectionError, requests.Timeout) as e:
             try:
                 fmt = u"couldn't connect to {0.netloc} ({1}) :("
                 irc.reply(fmt.format(uri, e.message.reason), prefixNick=False)
