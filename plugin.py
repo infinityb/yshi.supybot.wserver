@@ -52,11 +52,9 @@ TooManyRedirects = namedtuple('TooManyRedirects', [])
 
 
 def wserver(place, max_redirects=3):
-    if place.find('://') < 0:
-        place = 'http://{}'.format(place)
     for _ in xrange(max_redirects):
         uri = urlparse(place)
-        response = requests.get(place, allow_redirects=False)
+        response = requests.get(place, allow_redirects=False, timeout=1.2)
         server = None
         if 'server' in response.headers:
             server = response.headers['server']
@@ -83,15 +81,30 @@ class WServer(callbacks.Plugin):
         """<server>
 
         Finds out what webserver is running"""
+        if server_uri.find('://') < 0:
+            server_uri = 'http://{}'.format(server_uri)
+        uri = urlparse(server_uri)
+        try:
+            result_recs = wserver(server_uri)
+        except requests.ConnectionError as e:
+            try:
+                fmt = u"couldn't connect to {0.netloc} ({1}) :("
+                irc.reply(fmt.format(uri, e.message.reason), prefixNick=False)
+            except AttributeError:
+                fmt = u"couldn't connect to {0.netloc} :("
+                irc.reply(fmt.format(uri), prefixNick=False)
+            return
         for result_rec in wserver(server_uri):
             fmt = None
             if isinstance(result_rec, ServerRecord):
                 fmt = "{0.host} is running {0.wserver}"
+                if result_rec.wserver is None:
+                    fmt = u"couldn't tell what {0.host} is running"
             elif isinstance(result_rec, RedirectRecord):
                 fmt = "{0.host} redirects to {0.destination}"
             elif isinstance(result_rec, TooManyRedirects):
                 fmt = "Too many redirects."
-            irc.reply(fmt.format(result_rec))
+            irc.reply(fmt.format(result_rec), prefixNick=False)
     wserver = wrap(wserver, ['text'])
 
 Class = WServer
