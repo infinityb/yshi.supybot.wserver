@@ -51,10 +51,21 @@ RedirectRecord = namedtuple('RedirectRecord', ['host', 'destination'])
 TooManyRedirects = namedtuple('TooManyRedirects', [])
 
 
+class CouldNotConnect(Exception):
+    pass
+
+
 def wserver(place, max_redirects=3):
     for _ in xrange(max_redirects):
         uri = urlparse(place)
-        response = requests.get(place, allow_redirects=False, timeout=1.2)
+        try:
+            response = requests.get(place, allow_redirects=False, timeout=1.2)
+        except requests.ConnectionError:
+            yield CouldNotConnect(uri.netloc)
+            break
+        except requests.Timeout as e:
+            yield CouldNotConnect(uri.netloc, e)
+            break
         server = None
         if 'server' in response.headers:
             server = response.headers['server']
@@ -84,16 +95,7 @@ class WServer(callbacks.Plugin):
         if server_uri.find('://') < 0:
             server_uri = 'http://{}'.format(server_uri)
         uri = urlparse(server_uri)
-        try:
-            result_recs = list(wserver(server_uri))
-        except (requests.ConnectionError, requests.Timeout) as e:
-            try:
-                fmt = u"couldn't connect to {0.netloc} ({1}) :("
-                irc.reply(fmt.format(uri, e.message.reason), prefixNick=False)
-            except AttributeError:
-                fmt = u"couldn't connect to {0.netloc} :("
-                irc.reply(fmt.format(uri), prefixNick=False)
-            return
+        result_recs = wserver(server_uri)
         for result_rec in result_recs:
             fmt = None
             if isinstance(result_rec, ServerRecord):
@@ -104,6 +106,10 @@ class WServer(callbacks.Plugin):
                 fmt = "{0.host} redirects to {0.destination}"
             elif isinstance(result_rec, TooManyRedirects):
                 fmt = "Too many redirects."
+            elif isinstance(result_rec, CouldNotConnect):
+                fmt = "couldn't connect to {0[0]} :("
+                if len(args) > 1:
+                    fmt = "couldn't connect to {0[0]} ({0[1]}) :("
             irc.reply(fmt.format(result_rec), prefixNick=False)
     wserver = wrap(wserver, ['text'])
 
